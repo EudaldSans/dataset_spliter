@@ -3,13 +3,17 @@ import sys
 import os
 from typing import List, Tuple
 from pprint import pprint
+import csv
 
 import numpy as np
 import wave
 import whisper
+import pandas as pd
 
 from tqdm import tqdm
 
+desired_keywords = ['hey lola', 'sube', 'baja', 'enciende', 'apaga', 'ayuda']
+model = whisper.load_model('small')
 
 
 def load_wav(path: str) -> Tuple[np.ndarray, int]:
@@ -42,9 +46,19 @@ def load_text(path: str) -> List[str]:
     return line.split(' ')
 
 
-def main():
-    model = whisper.load_model('small')
-    wav_path = os.path.join('dataset', 'ey_lola_baja_todas_las_persianas.wav')
+def process_pandas_df(item):
+    wav_name = item['path']
+    try:
+        process_sample(wav_name)
+        print(f'Processed {wav_name}')
+    except ValueError as e:
+        pass
+
+def process_sample(wav_name: str) -> None:
+    wav_path = os.path.join('dataset', wav_name)
+    if not os.path.exists(wav_path):
+        raise ValueError(f'File {wav_path} does not exist.')
+
     audio, sr = load_wav(wav_path)
     result = model.transcribe(wav_path, verbose=True, word_timestamps=True)
     pprint(result['segments'])
@@ -56,19 +70,16 @@ def main():
         for word in words:
             word_start = math.floor(word['start'] * sr)
             word_end = math.ceil(word['end'] * sr)
-            '''word_duration = word_end - word_start
-            if word_duration < sr:
-                missing_samples = sr - word_duration
-                word_start = word_start - missing_samples // 2
-                word_end = word_end + missing_samples // 2
-
-                if word_start < 0: word_start = 0
-                if word_end > len(audio): word_end = len(audio)'''
 
             sample = audio[word_start: word_end]
             detected_word = word['word'].strip(" ").strip(',')
             save_path = os.path.join('results', f'{detected_word}.wav')
             save_wav(save_path, sr, sample)
+
+
+def main():
+    df = pd.read_csv(os.path.join('dataset', 'train.tsv'), sep='\t')
+    df.apply(process_pandas_df, axis='columns')
 
 
 if __name__ == '__main__':
