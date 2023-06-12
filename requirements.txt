@@ -1,2 +1,3 @@
 numpy
-webrtcvad
+openai-whisper
+tqdm
