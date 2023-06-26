@@ -14,10 +14,11 @@ import wave
 import whisper
 import pandas as pd
 
-from tqdm import tqdm
+# from tqdm import tqdm
 
 desired_keywords = ['hey lola', 'sube', 'baja', 'enciende', 'apaga', 'ayuda']
-model = whisper.load_model('small')
+captured_words = dict()
+model = whisper.load_model('medium')
 
 
 def load_wav(path: str) -> Tuple[np.ndarray, int]:
@@ -67,15 +68,22 @@ def load_text(path: str) -> List[str]:
 
 def process_pandas_df(item):
     wav_name = item['path']
-    try:
-        process_sample(wav_name)
-        print(f'Processed {wav_name}')
-    except ValueError as e:
-        pass
+    wav_sentence = item['sentence']
+    words_in_sentence = [''.join(c for c in word if c.isalnum()).lower() for word in wav_sentence.split(' ')]
+
+    for keyword in desired_keywords:
+        if keyword in words_in_sentence:
+            try:
+                process_sample(wav_name)
+                print(f'Processed {wav_name}')
+                return
+            except ValueError as e:
+                pass
 
 
 def process_sample(file_name: str) -> None:
     file_path = os.path.join('dataset', file_name)
+    print(f'Loading {file_path}')
     if not os.path.exists(file_path):
         raise ValueError(f'File {file_path} does not exist.')
 
@@ -85,20 +93,36 @@ def process_sample(file_name: str) -> None:
         print(f'Audio format for {file_name} not supported')
         return
 
-    result = model.transcribe(file_path, verbose=True, word_timestamps=True)
-    pprint(result['segments'])
+    result = model.transcribe(file_path, verbose=False, word_timestamps=True)
     segments = result['segments']
 
-    for segment in tqdm(segments, desc=f'Processing segment', file=sys.stdout):
+    for segment in segments:
+        print(f'Processing results for segment: {segment["text"]}')
         words = segment['words']
 
         for word in words:
             word_start = math.floor(word['start'] * sr)
             word_end = math.ceil(word['end'] * sr)
+            '''if word_end - word_start > sr: continue
+            if word_end - word_start < sr * 0.7:
+                word_start = math.floor(word_start - sr * 0.15)
+                word_end = math.ceil(word_end + sr * 0.15)
+
+                if word_start < 0: word_start = 0
+                if word_end > len(audio): word_end = len(audio)'''
 
             sample = audio[word_start: word_end]
-            detected_word = word['word'].strip(" ").strip(',')
-            save_path = os.path.join('results', f'{detected_word}.wav')
+            detected_word = ''.join(c for c in word['word'] if c.isalnum()).lower()
+            if detected_word not in desired_keywords:
+                print(f'Rejected {detected_word}')
+                continue
+
+            print(f'Found: {detected_word}')
+            if captured_words.get(detected_word) is None:
+                captured_words[detected_word] = 0
+
+            save_path = os.path.join('results', f'{detected_word}_{captured_words[detected_word]}.wav')
+            captured_words[detected_word] += 1
             save_wav(save_path, sr, sample)
 
 
