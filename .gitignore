@@ -2,3 +2,4 @@ venv
 .idea
 model
 results/*
+# dataset/*
