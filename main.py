@@ -6,6 +6,7 @@ from pprint import pprint
 import csv
 import array
 
+import pydub.exceptions
 from pydub import AudioSegment
 from pydub.utils import get_array_type
 
@@ -16,8 +17,8 @@ import pandas as pd
 
 # from tqdm import tqdm
 
-desired_keywords = ['hey lola', 'sube', 'baja', 'enciende', 'apaga', 'ayuda']
-captured_words = dict()
+desired_keywords = ['lola', 'sube', 'baja', 'enciende', 'apaga', 'ayuda']
+captured_words = {'apaga':87, 'ayuda':97, 'enciende':90, 'lola':82}
 model = whisper.load_model('medium')
 
 
@@ -88,12 +89,17 @@ def process_sample(file_name: str) -> None:
         raise ValueError(f'File {file_path} does not exist.')
 
     if '.wav' in file_path: audio, sr = load_wav(file_path)
-    elif '.mp3' in file_path: audio, sr = load_mp3(file_path)
+    elif '.mp3' in file_path:
+        try:
+            audio, sr = load_mp3(file_path)
+        except pydub.exceptions.CouldntDecodeError as e:
+            print(f'Audio {file_name} failed to decode')
+            return
     else:
         print(f'Audio format for {file_name} not supported')
         return
 
-    result = model.transcribe(file_path, verbose=False, word_timestamps=True)
+    result = model.transcribe(file_path, verbose=False, word_timestamps=True, language='spanish')
     segments = result['segments']
 
     for segment in segments:
@@ -129,8 +135,19 @@ def process_sample(file_name: str) -> None:
 def main():
     if not os.path.exists('results'): os.mkdir('results')
 
-    df = pd.read_csv(os.path.join('dataset', 'train.tsv'), sep='\t')
-    df.apply(process_pandas_df, axis='columns')
+    print('Starting procesSsSs')
+    files = os.listdir('dataset')
+    done = False
+    for file in files:
+        if 'hey lola enciende ap' in file:
+            done = True
+        if not done: continue
+        process_sample(file)
+
+    print('Finished procesSsSs')
+
+    # df = pd.read_csv(os.path.join('dataset', 'train.tsv'), sep='\t')
+    # df.apply(process_pandas_df, axis='columns')
 
 
 if __name__ == '__main__':
